@@ -7,8 +7,10 @@ time via `GET /reconciliation`. A chaos test throws 10,000 concurrent transfers 
 threads at 50 accounts and asserts the books still balance, for both of the two supported
 locking strategies.
 
-**Live:** https://ledgerguard-ledger-service.onrender.com
+**Live API:** https://ledgerguard-ledger-service.onrender.com
 **Swagger UI:** https://ledgerguard-ledger-service.onrender.com/swagger-ui.html
+**Live web app:** https://ledgerguard-web.vercel.app (demo users: `alice`/`password123`, or
+`admin`/`admin123`)
 
 > **Free tier:** the service sleeps when idle, so the first request after a while can take
 > ~1-3 minutes to wake up; it's fast on every request after that. The database is a free
@@ -21,6 +23,13 @@ locking strategies.
 > tested code, not a stub; it's proven by the automated test suite and by running
 > `docker compose up` locally, which brings up both services plus Kafka in KRaft mode. See
 > [docs/design-spec.md](docs/design-spec.md) for how it all fits together.
+>
+> **Known gap in the live demo:** the web app's Notifications page won't show anything in
+> production, because notification-service isn't deployed anywhere public and the live
+> ledger-service has Kafka disabled (see above) -- so no events ever reach a notification
+> consumer in this environment. Login, accounts, and sending money (including the
+> idempotency-key replay demo) all work fully live. The notification pipeline itself is proven
+> by the automated test suite and by `docker compose up` locally.
 
 ## What's here
 
@@ -29,6 +38,10 @@ locking strategies.
 - **notification-service** -- consumes `ledger.transfers` off Kafka, idempotently, and serves
   per-account notifications.
 - **common** -- the Kafka event DTOs shared by both.
+- **web** -- a Next.js 14 customer app (login, accounts, send money, notifications). Talks to
+  ledger-service/notification-service through its own server-side API routes (a
+  Backend-for-Frontend layer), never directly from the browser. See
+  [docs/interview-notes.md](docs/interview-notes.md) for how that's wired up.
 
 ## How to run it
 
@@ -42,6 +55,18 @@ docker compose up --build
 - notification-service: http://localhost:8081
 - Postgres: localhost:5544
 - Kafka: localhost:9092
+
+### The web app
+
+```bash
+cd web
+cp .env.local.example .env.local   # point at ledger-service/notification-service
+npm install
+npm run dev                        # http://localhost:3000
+```
+
+Tests: `npm test` (Jest + React Testing Library), `npm run test:e2e` (Playwright; needs the
+backend running too).
 
 ### Just the tests
 
