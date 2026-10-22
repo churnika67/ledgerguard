@@ -71,6 +71,56 @@ same event both pass the check. Separately, if processing a message *fails* for 
 still fails, it's routed to a dead-letter topic instead of blocking that Kafka partition forever
 for every message behind it.
 
+## Server Components vs Client Components, and why the split matters
+
+Next.js's App Router gives every page a choice: render on the server, or render in the browser.
+Server Components (the default) run once on the server per request -- they can read the httpOnly
+session cookie directly and call the backend, and what gets sent to the browser is already-filled
+HTML. `/accounts` and `/accounts/[id]` are Server Components for exactly this reason: the page
+shows real data on the very first paint, with no loading spinner, and the JWT inside the cookie
+never has to be exposed to any JavaScript running in the browser. Anything that needs to react to
+clicks, typing, or polling -- forms, the "retry" button, the notifications list -- has to be a
+Client Component (marked `"use client"` at the top of the file), because only client-side React
+has event handlers and state. The two meet in the middle: a Server Component fetches the initial
+data and passes it as a prop into a Client Component, which then takes over for interactivity.
+
+## The Backend-for-Frontend (BFF) proxy pattern
+
+This project's three requirements look contradictory at first: the JWT lives in an httpOnly
+cookie (so client-side JavaScript literally cannot read it), the browser needs to call an API to
+fetch accounts and send transfers, and CORS needs to be configured on ledger-service for the web
+origin. The resolution is that the browser never calls ledger-service directly. Client-side code
+calls *relative* routes under `web/src/app/api/**` -- these are Next.js Route Handlers, which run
+on the server, not in the browser. A route handler reads the JWT out of the httpOnly cookie (which
+server-side code *can* read) and makes the real call to ledger-service itself, attaching
+`Authorization: Bearer <token>` server-to-server. That server-to-server hop isn't a cross-origin
+browser request at all, so CORS doesn't even apply to it -- CORS was added to ledger-service
+separately, for the case where something *does* call it directly from a browser (Swagger UI being
+the obvious example). This whole shape -- a thin server layer in front of the real backend, doing
+auth and reshaping requests for its one frontend -- is what "Backend-for-Frontend" means.
+
+## Proving idempotency with a UI, not just a unit test
+
+The backend already guarantees that resending a transfer with the same `Idempotency-Key` returns
+the original result instead of moving money twice (see above). The `/send` page makes that
+guarantee visible: submitting the form generates a fresh `crypto.randomUUID()` as the key for a
+*new* transfer, but a "Retry same request" button resends the exact same key and body again. The
+response that comes back carries the identical `transferId` as the first attempt, and the UI
+flags it with a note that it was a replay. It's the same mechanism as the backend's own test suite
+proves, just demonstrated by clicking a button instead of reading an assertion.
+
+## Why money is a string on the way in, and formatted on the way out
+
+`BigDecimal` fields in Java (account balances, transfer amounts) serialize to JSON as bare numeric
+literals, e.g. `100.0`. `openapi-typescript` correctly types that as a JS `number` -- but a JS
+number has no concept of "trailing zeros," so `100.00` becomes the number `100`, and naively
+rendering it would show "100" instead of "100.00" in the UI. Two separate fixes were needed: for
+*display*, every balance or amount is passed through a `formatMoney()` helper (`toFixed(2)`)
+before being rendered; for *requests* (opening a new account, sending a transfer), the amount is
+sent as a JSON *string* ("25.00") rather than a JS number, using hand-written request types instead
+of the generated ones -- Jackson on the Java side happily coerces a JSON string into a `BigDecimal`
+with full precision, so nothing on the backend had to change.
+
 ## How JWT auth flows through the gateway
 
 *(To fill in once the API gateway from Step 3 exists.)*
