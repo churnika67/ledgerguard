@@ -10,6 +10,11 @@ locking strategies.
 **Live:** https://ledgerguard-ledger-service.onrender.com
 **Swagger UI:** https://ledgerguard-ledger-service.onrender.com/swagger-ui.html
 
+> **Free tier:** the service sleeps when idle, so the first request after a while can take
+> ~1-3 minutes to wake up; it's fast on every request after that. The database is a free
+> [Neon](https://neon.tech) Postgres (serverless, no 30-day expiry, unlike Render's free Postgres
+> plan) -- connected via env vars only, nothing database-specific is hardcoded or committed.
+>
 > The live deploy runs ledger-service only, with Kafka disabled (`KAFKA_ENABLED=false`) -- Render
 > has no managed Kafka, and this keeps the demo free and dependency-light. The full event-driven
 > pipeline (outbox -> Kafka -> idempotent notification consumer -> dead-letter topic) is real,
