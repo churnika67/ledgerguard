@@ -63,14 +63,14 @@ class LedgerMutationService {
         accountRepository.save(from);
         accountRepository.save(to);
 
+        transferRepository.save(Transfer.completed(command.transferId(), command.idempotencyKey(),
+                command.requestHash(), command.fromAccountId(), command.toAccountId(), command.amount(),
+                command.currency(), command.createdAt()));
+
         ledgerEntryRepository.save(new LedgerEntry(UUID.randomUUID(), command.transferId(), from.getId(),
                 Direction.DEBIT, command.amount(), command.createdAt()));
         ledgerEntryRepository.save(new LedgerEntry(UUID.randomUUID(), command.transferId(), to.getId(),
                 Direction.CREDIT, command.amount(), command.createdAt()));
-
-        transferRepository.save(Transfer.completed(command.transferId(), command.idempotencyKey(),
-                command.requestHash(), command.fromAccountId(), command.toAccountId(), command.amount(),
-                command.currency(), command.createdAt()));
 
         UUID eventId = UUID.randomUUID();
         TransferCompletedEvent event = new TransferCompletedEvent(eventId, command.transferId(),

@@ -4,6 +4,7 @@ import com.ledgerguard.ledger.api.dto.ReconciliationResponse;
 import com.ledgerguard.ledger.service.ReconciliationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,6 +21,7 @@ public class ReconciliationController {
     }
 
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Check the ledger's money-conservation invariants (ADMIN only)")
     public ReconciliationResponse reconcile() {
         return ReconciliationResponse.from(reconciliationService.check());
