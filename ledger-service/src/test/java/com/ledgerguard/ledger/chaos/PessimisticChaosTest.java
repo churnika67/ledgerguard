@@ -7,7 +7,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import java.util.concurrent.TimeUnit;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "ledger.locking=PESSIMISTIC")
+        properties = {"ledger.locking=PESSIMISTIC", "ledger.kafka.enabled=false"})
 class PessimisticChaosTest extends ChaosTestSupport {
 
     @Test

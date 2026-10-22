@@ -30,6 +30,7 @@
         <testcontainers.version>1.21.4</testcontainers.version>
         <springdoc.version>2.6.0</springdoc.version>
         <jjwt.version>0.12.6</jjwt.version>
+        <surefire.excludedGroups>benchmark</surefire.excludedGroups>
     </properties>
 
     <dependencyManagement>
@@ -52,6 +53,7 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <configuration>
                         <argLine>-Xshare:off -Djdk.attach.allowAttachSelf=true</argLine>
+                        <excludedGroups>${surefire.excludedGroups}</excludedGroups>
                     </configuration>
                 </plugin>
             </plugins>
