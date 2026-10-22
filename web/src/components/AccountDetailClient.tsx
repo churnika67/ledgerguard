@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAccount } from "@/hooks/useAccounts";
 import { formatMoney } from "@/lib/format";
 import type { AccountDetailResponse } from "@/lib/client-api";
+import { Wallet, ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, History } from "lucide-react";
 
 const PAGE_SIZE = 5;
 
@@ -23,50 +24,77 @@ export function AccountDetailClient({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold">{account.ownerName}</h1>
-        <p className="text-3xl font-semibold">
+      <div className="rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-600 to-slate-900 p-6 text-white shadow-lg shadow-indigo-900/20">
+        <div className="mb-6 flex items-center justify-between">
+          <span className="flex items-center gap-2 text-sm text-indigo-100">
+            <Wallet className="h-4 w-4" aria-hidden="true" />
+            {account.ownerName}
+          </span>
+          <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-medium tracking-wide">
+            {account.currency}
+          </span>
+        </div>
+        <p className="text-3xl font-semibold tabular-nums">
           {formatMoney(account.balance)}{" "}
-          <span className="text-base font-normal text-slate-500">{account.currency}</span>
+          <span className="text-base font-normal text-indigo-100">{account.currency}</span>
         </p>
       </div>
 
       <div>
-        <h2 className="mb-2 text-lg font-semibold">Recent ledger entries</h2>
+        <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold">
+          <History className="h-5 w-5 text-indigo-600" aria-hidden="true" />
+          Recent ledger entries
+        </h2>
         {entries.length === 0 ? (
-          <p className="text-slate-500">No activity yet.</p>
+          <p className="rounded-2xl border border-dashed border-slate-300 bg-white py-8 text-center text-slate-500">
+            No activity yet.
+          </p>
         ) : (
           <>
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-left text-slate-500">
-                  <th className="py-2">Direction</th>
-                  <th className="py-2">Amount</th>
-                  <th className="py-2">When</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pageEntries.map((entry) => (
-                  <tr key={entry.id} className="border-b border-slate-100">
-                    <td className="py-2">
-                      <span className={entry.direction === "CREDIT" ? "text-green-600" : "text-red-600"}>
+            <ul className="flex flex-col gap-2">
+              {pageEntries.map((entry) => {
+                const isCredit = entry.direction === "CREDIT";
+                return (
+                  <li
+                    key={entry.id}
+                    className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm shadow-slate-200/40"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`flex h-9 w-9 items-center justify-center rounded-full ${
+                          isCredit ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                        }`}
+                      >
+                        {isCredit ? (
+                          <ArrowDownLeft className="h-4 w-4" aria-hidden="true" />
+                        ) : (
+                          <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </span>
+                      <span className={isCredit ? "font-medium text-emerald-600" : "font-medium text-rose-600"}>
                         {entry.direction}
                       </span>
-                    </td>
-                    <td className="py-2">{formatMoney(entry.amount)}</td>
-                    <td className="py-2 text-slate-500">
-                      {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ""}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="mt-3 flex items-center gap-3 text-sm">
+                    </div>
+                    <div className="text-right">
+                      <div className={`font-medium tabular-nums ${isCredit ? "text-emerald-600" : "text-rose-600"}`}>
+                        {isCredit ? "+" : "-"}
+                        {formatMoney(entry.amount)}
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ""}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="mt-4 flex items-center justify-center gap-3 text-sm">
               <button
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0}
-                className="rounded border border-slate-300 px-2 py-1 disabled:opacity-40"
+                className="flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1.5 transition-colors hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent"
               >
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                 Previous
               </button>
               <span className="text-slate-500">
@@ -75,9 +103,10 @@ export function AccountDetailClient({
               <button
                 onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
                 disabled={page >= pageCount - 1}
-                className="rounded border border-slate-300 px-2 py-1 disabled:opacity-40"
+                className="flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1.5 transition-colors hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent"
               >
                 Next
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
           </>
