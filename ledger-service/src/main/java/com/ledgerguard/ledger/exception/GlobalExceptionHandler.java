@@ -1,5 +1,6 @@
 package com.ledgerguard.ledger.exception;
 
+import com.ledgerguard.ledger.api.AdminController;
 import com.ledgerguard.ledger.domain.Account;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,9 +21,15 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    @ExceptionHandler({AccountNotFoundException.class, TransferNotFoundException.class})
+    @ExceptionHandler({AccountNotFoundException.class, TransferNotFoundException.class,
+            AdminController.ChaosRunNotFoundException.class})
     public ProblemDetail handleNotFound(RuntimeException e) {
         return problem(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ProblemDetail handleIllegalArgument(IllegalArgumentException e) {
+        return problem(HttpStatus.BAD_REQUEST, e.getMessage());
     }
 
     @ExceptionHandler(IdempotencyConflictException.class)
