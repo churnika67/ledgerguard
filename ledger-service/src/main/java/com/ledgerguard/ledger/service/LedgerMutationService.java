@@ -14,6 +14,7 @@ import com.ledgerguard.ledger.outbox.OutboxEventRepository;
 import com.ledgerguard.ledger.repository.AccountRepository;
 import com.ledgerguard.ledger.repository.LedgerEntryRepository;
 import com.ledgerguard.ledger.repository.TransferRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
@@ -32,15 +33,17 @@ class LedgerMutationService {
     private final LedgerEntryRepository ledgerEntryRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     LedgerMutationService(AccountRepository accountRepository, TransferRepository transferRepository,
                            LedgerEntryRepository ledgerEntryRepository, OutboxEventRepository outboxEventRepository,
-                           ObjectMapper objectMapper) {
+                           ObjectMapper objectMapper, ApplicationEventPublisher eventPublisher) {
         this.accountRepository = accountRepository;
         this.transferRepository = transferRepository;
         this.ledgerEntryRepository = ledgerEntryRepository;
         this.outboxEventRepository = outboxEventRepository;
         this.objectMapper = objectMapper;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -62,6 +65,7 @@ class LedgerMutationService {
         to.credit(command.amount());
         accountRepository.save(from);
         accountRepository.save(to);
+        eventPublisher.publishEvent(new AccountsMutatedEvent(from.getId(), to.getId()));
 
         transferRepository.save(Transfer.completed(command.transferId(), command.idempotencyKey(),
                 command.requestHash(), command.fromAccountId(), command.toAccountId(), command.amount(),

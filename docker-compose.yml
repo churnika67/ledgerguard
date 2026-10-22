@@ -37,6 +37,16 @@ services:
       timeout: 10s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6399:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   ledger-service:
     build:
       context: .
@@ -51,10 +61,15 @@ services:
       KAFKA_ENABLED: "true"
       LEDGER_LOCKING: OPTIMISTIC
       JWT_SECRET: ledgerguard-demo-secret-key-change-me-please-32bytes-min
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_ENABLED: "true"
     depends_on:
       postgres:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   notification-service:

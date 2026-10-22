@@ -31,6 +31,13 @@ spring:
         retries: 10
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:false}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -39,6 +46,9 @@ ledger:
   locking: ${LEDGER_LOCKING:OPTIMISTIC}
   kafka:
     enabled: ${KAFKA_ENABLED:true}
+  cache:
+    enabled: ${REDIS_ENABLED:true}
+    accounts-ttl-seconds: 60
   optimistic-retry:
     max-attempts: 10
     base-delay-ms: 5

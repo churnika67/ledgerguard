@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -37,13 +38,16 @@ class LedgerMutationServiceTest {
     private LedgerEntryRepository ledgerEntryRepository;
     @Mock
     private OutboxEventRepository outboxEventRepository;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private LedgerMutationService ledgerMutationService;
 
     @BeforeEach
     void setUp() {
         ledgerMutationService = new LedgerMutationService(accountRepository, transferRepository,
-                ledgerEntryRepository, outboxEventRepository, new ObjectMapper().registerModule(new JavaTimeModule()));
+                ledgerEntryRepository, outboxEventRepository, new ObjectMapper().registerModule(new JavaTimeModule()),
+                eventPublisher);
     }
 
     private Account account(BigDecimal balance, String currency) {

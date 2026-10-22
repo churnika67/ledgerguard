@@ -16,7 +16,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * the same container.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "ledger.kafka.enabled=false")
+        properties = {"ledger.kafka.enabled=false", "ledger.cache.enabled=false"})
 public abstract class PostgresIntegrationTest {
 
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
