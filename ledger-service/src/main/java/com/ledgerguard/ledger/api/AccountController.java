@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -32,6 +33,14 @@ public class AccountController {
     public AccountController(AccountService accountService, OwnershipGuard ownershipGuard) {
         this.accountService = accountService;
         this.ownershipGuard = ownershipGuard;
+    }
+
+    @GetMapping
+    @Operation(summary = "List the caller's own accounts, newest first")
+    public List<AccountResponse> listMine(Authentication authentication) {
+        return accountService.findOwnedBy(authentication.getName()).stream()
+                .map(AccountResponse::from)
+                .toList();
     }
 
     @PostMapping

@@ -25,4 +25,6 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     java.math.BigDecimal sumOpeningBalances();
 
     List<Account> findAllByIdIn(List<UUID> ids);
+
+    List<Account> findAllByOwnerNameOrderByCreatedAtDesc(String ownerName);
 }

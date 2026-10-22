@@ -1,5 +1,6 @@
 package com.ledgerguard.ledger.security;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -16,6 +17,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Stateless JWT security. Two demo users are provisioned in memory: {@code alice} (ROLE_USER)
@@ -64,12 +71,32 @@ public class SecurityConfig {
         return provider;
     }
 
+    /**
+     * CORS is only needed for calls made directly from a browser (the web app's server-side
+     * route handlers call this API server-to-server, which CORS doesn't apply to at all, but
+     * Swagger UI and any future direct browser call do need it).
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${web.cors-allowed-origins:http://localhost:3000}") List<String> allowedOrigins) {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(allowedOrigins);
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
+        configuration.setAllowCredentials(true);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, JwtService jwtService,
                                             RestAuthenticationEntryPoint entryPoint,
-                                            RestAccessDeniedHandler accessDeniedHandler) throws Exception {
+                                            RestAccessDeniedHandler accessDeniedHandler,
+                                            CorsConfigurationSource corsConfigurationSource) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(handling -> handling
                         .authenticationEntryPoint(entryPoint)

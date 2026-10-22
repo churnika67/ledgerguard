@@ -35,6 +35,11 @@ public class AccountService {
         return accountRepository.findById(accountId).orElseThrow(() -> new AccountNotFoundException(accountId));
     }
 
+    /** Accounts owned by the given JWT subject, newest first. */
+    public List<Account> findOwnedBy(String ownerName) {
+        return accountRepository.findAllByOwnerNameOrderByCreatedAtDesc(ownerName);
+    }
+
     public List<LedgerEntry> recentEntries(UUID accountId) {
         return ledgerEntryRepository.findTop20ByAccountIdOrderByCreatedAtDesc(accountId);
     }
