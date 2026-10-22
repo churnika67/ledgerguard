@@ -24,4 +24,7 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
             + "from LedgerEntry e group by e.transferId "
             + "having sum(case when e.direction = 'DEBIT' then e.amount else -e.amount end) <> 0")
     List<Object[]> findTransferIdsThatDoNotNetToZero();
+
+    @Query("select e.accountId, e.direction, sum(e.amount) from LedgerEntry e group by e.accountId, e.direction")
+    List<Object[]> sumsByAccountAndDirection();
 }
