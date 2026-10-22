@@ -121,6 +121,58 @@ sent as a JSON *string* ("25.00") rather than a JS number, using hand-written re
 of the generated ones -- Jackson on the Java side happily coerces a JSON string into a `BigDecimal`
 with full precision, so nothing on the backend had to change.
 
+## Standalone components and a functional route guard
+
+The Angular admin console (Step 2) uses no `NgModule` at all -- every component declares its own
+`imports` array of exactly the pieces it needs (just `MatTableModule` for a table-heavy page,
+nothing more), and the app is wired up with a handful of top-level `provide*()` calls in
+`app.config.ts` instead of a root module. Route protection follows the same shift: `adminGuard`
+is a plain function (`CanActivateFn`), not a class implementing `CanActivate`. It reads two
+things off the decoded JWT via `AuthService`: is there a token at all, and does it carry
+`ROLE_ADMIN`. A `USER`-role account (like the customer app's `alice`) can still get a valid JWT
+from the same `/auth/token` endpoint -- the backend doesn't know or care which frontend is
+asking -- but the guard sends them straight back to `/login` with an explanation, because
+*having* a token and being *allowed into this console* are different checks.
+
+## Why the admin console keeps its JWT in localStorage, unlike the customer app
+
+The Next.js customer app never lets the browser's own JavaScript touch the JWT -- it sits in an
+httpOnly cookie, and a server-side Backend-for-Frontend layer is what actually calls
+ledger-service. The Angular admin console has no server of its own; it's a pure single-page app
+that gets served as static files and calls ledger-service directly from the browser. That means
+there's no server-side place to stash an httpOnly cookie, so the token has to live somewhere
+client-side JavaScript can read it in order to attach `Authorization: Bearer <token>` to each
+request -- `localStorage` is the standard choice for this kind of SPA. This is a real, acceptable
+security tradeoff for an internal admin tool (and is why CORS matters here in a way it doesn't
+for the customer app: the browser is calling ledger-service's origin directly, so
+`ledger.web.cors-allowed-origins` has to explicitly list `http://localhost:4200` and the deployed
+console's URL, or the browser blocks the request before it ever reaches the backend).
+
+## Signals instead of manual subscriptions for shared state
+
+`AuthService` holds the JWT in a `signal`, and derives `isAdmin`, `isAuthenticated`, and
+`username` from it with `computed()`. Any component template that reads `auth.isAdmin()`
+automatically re-renders when the underlying token signal changes -- logging in or out updates
+the nav bar, the route guard's next check, and anything else reading those signals, with no
+`.subscribe()`/`.unsubscribe()` pairs to manage and no risk of a component reading stale state
+because it forgot to re-subscribe. This is the same idea as the Next.js app's React Query cache
+invalidation (Step 1), just Angular's own reactivity primitive instead of a library's.
+
+## Turning a JUnit chaos test into an on-demand ops action
+
+The backend already had a chaos test (50 accounts, 10,000 transfers, 200 virtual threads,
+asserting the three invariants still hold) -- but it only ran as part of `mvn verify`, on a fixed
+workload, producing output only visible in a test log. `POST /admin/chaos-runs` takes the same
+proven workload shape (random from/to/amount, a pool of virtual threads, retried idempotency-key
+replays) and makes it parameterized, bounded (max 5,000 transfers, so nobody can accidentally
+launch something unbounded against the live database), and asynchronous -- it kicks off the run
+on its own virtual thread and returns immediately with a run id, which the admin console then
+polls every 500ms via `GET /admin/chaos-runs/{id}` until it's done. The retries/conflicts counts
+come from the same Micrometer counters the benchmark tests already used, read as a before/after
+delta for just that run. The result is the same correctness exercise the automated test suite
+already proves, just something a non-technical operator can trigger from a browser and watch
+complete, with a chart of the outcome.
+
 ## How JWT auth flows through the gateway
 
 *(To fill in once the API gateway from Step 3 exists.)*

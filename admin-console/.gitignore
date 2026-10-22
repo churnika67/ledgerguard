@@ -44,3 +44,5 @@ Thumbs.db
 # testing
 /playwright-report
 /test-results
+.vercel
+.env*

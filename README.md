@@ -11,6 +11,8 @@ locking strategies.
 **Swagger UI:** https://ledgerguard-ledger-service.onrender.com/swagger-ui.html
 **Live web app:** https://ledgerguard-web.vercel.app (demo users: `alice`/`password123`, or
 `admin`/`admin123`)
+**Live admin console:** https://ledgerguard-admin-console.vercel.app (ADMIN only --
+`admin`/`admin123`)
 
 > **Free tier:** the service sleeps when idle, so the first request after a while can take
 > ~1-3 minutes to wake up; it's fast on every request after that. The database is a free
@@ -42,6 +44,12 @@ locking strategies.
   ledger-service/notification-service through its own server-side API routes (a
   Backend-for-Frontend layer), never directly from the browser. See
   [docs/interview-notes.md](docs/interview-notes.md) for how that's wired up.
+- **admin-console** -- an Angular 17 back-office SPA (reconciliation dashboard, a
+  sortable/searchable/paginated accounts table, a filterable transfer audit log, and a
+  chaos-test panel that drives real concurrent load against the backend and charts the result).
+  Unlike `web`, it's a pure client-side app with no server of its own, so it calls
+  ledger-service directly from the browser -- see interview-notes.md for why that means it
+  stores its JWT differently than the Next.js app does.
 
 ## How to run it
 
@@ -67,6 +75,18 @@ npm run dev                        # http://localhost:3000
 
 Tests: `npm test` (Jest + React Testing Library), `npm run test:e2e` (Playwright; needs the
 backend running too).
+
+### The admin console
+
+```bash
+cd admin-console
+npm install
+npm start                          # http://localhost:4200 (ADMIN only -- admin/admin123)
+```
+
+Points at `http://localhost:8090` in dev by default (see `src/environments/environment.ts`); the
+production build points at the live Render backend. Tests: `npm test` (Jasmine/Karma),
+`npx playwright test` (needs the backend running too).
 
 ### Just the tests
 
