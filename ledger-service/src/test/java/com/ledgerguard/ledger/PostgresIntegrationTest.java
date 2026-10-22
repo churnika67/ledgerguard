@@ -15,7 +15,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * reaps it when the JVM exits. This avoids restart/port races when several test classes share
  * the same container.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "ledger.kafka.enabled=false")
 public abstract class PostgresIntegrationTest {
 
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
