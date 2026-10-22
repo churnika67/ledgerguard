@@ -16,6 +16,8 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
 
     long countByTransferId(UUID transferId);
 
+    long countByTransferIdIn(java.util.Collection<UUID> transferIds);
+
     @Query("select coalesce(sum(e.amount), 0) from LedgerEntry e "
             + "where e.accountId = :accountId and e.direction = :direction")
     BigDecimal sumByAccountIdAndDirection(@Param("accountId") UUID accountId, @Param("direction") Direction direction);

@@ -4,7 +4,7 @@ import com.ledgerguard.ledger.exception.RetryExhaustedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -14,8 +14,11 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * Retries a transfer under optimistic locking ({@code @Version}) when two concurrent updates
  * collide on the same account. Each attempt runs in its own transaction via
- * {@link OptimisticAttemptRunner}; on a version conflict we back off with jitter and try again,
- * up to {@code ledger.optimistic-retry.max-attempts} times.
+ * {@link OptimisticAttemptRunner}; on a version conflict, or on a Postgres deadlock from two
+ * transfers updating the same pair of accounts in opposite order (optimistic locking takes no
+ * explicit locks, so it has no fixed acquisition order to prevent this), we back off with
+ * jitter and try again, up to {@code ledger.optimistic-retry.max-attempts} times. Both failure
+ * modes are instances of Spring's {@link ConcurrencyFailureException}.
  */
 @Component
 @ConditionalOnProperty(prefix = "ledger", name = "locking", havingValue = "OPTIMISTIC", matchIfMissing = true)
@@ -47,15 +50,15 @@ class OptimisticTransferExecutor implements TransferExecutor {
                 TransferExecutionResult result = attemptRunner.attempt(command);
                 metrics.recordLatency(STRATEGY, Duration.between(start, Instant.now()));
                 return result;
-            } catch (ObjectOptimisticLockingFailureException e) {
+            } catch (ConcurrencyFailureException e) {
                 metrics.recordConflict(STRATEGY);
                 if (attempt == maxAttempts) {
                     break;
                 }
                 metrics.recordRetry(STRATEGY);
                 sleepWithBackoff(attempt);
-                log.debug("Optimistic conflict on transfer {}, retrying (attempt {}/{})",
-                        command.transferId(), attempt + 1, maxAttempts);
+                log.debug("Concurrency conflict on transfer {} ({}), retrying (attempt {}/{})",
+                        command.transferId(), e.getClass().getSimpleName(), attempt + 1, maxAttempts);
             }
         }
         throw new RetryExhaustedException(maxAttempts);
