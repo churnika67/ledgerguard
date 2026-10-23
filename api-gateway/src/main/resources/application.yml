@@ -1,0 +1,70 @@
+spring:
+  application:
+    name: api-gateway
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:false}
+  cloud:
+    gateway:
+      routes:
+        - id: ledger-service
+          uri: ${LEDGER_SERVICE_URL:http://localhost:8090}
+          predicates:
+            - Path=/api/ledger/**
+          filters:
+            - StripPrefix=2
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_REPLENISH_PER_SECOND:10}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BURST_CAPACITY:20}
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
+        - id: notification-service
+          uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - StripPrefix=2
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_REPLENISH_PER_SECOND:10}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BURST_CAPACITY:20}
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: ${WEB_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:4200}
+            allowedMethods: [GET, POST, PUT, DELETE, OPTIONS]
+            allowedHeaders: [Authorization, Content-Type, Idempotency-Key]
+            allowCredentials: true
+
+server:
+  port: ${SERVER_PORT:8082}
+
+jwt:
+  secret: ${JWT_SECRET:ledgerguard-demo-secret-key-change-me-please-32bytes-min}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+logging:
+  level:
+    com.ledgerguard: INFO
+    org.springframework.cloud.gateway: INFO

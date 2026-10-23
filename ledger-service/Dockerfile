@@ -4,6 +4,7 @@ COPY pom.xml .
 COPY common/pom.xml common/pom.xml
 COPY ledger-service/pom.xml ledger-service/pom.xml
 COPY notification-service/pom.xml notification-service/pom.xml
+COPY api-gateway/pom.xml api-gateway/pom.xml
 RUN mvn -q -pl common,ledger-service -am dependency:go-offline
 
 COPY common/src common/src
