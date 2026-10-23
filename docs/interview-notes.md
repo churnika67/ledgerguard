@@ -175,11 +175,81 @@ complete, with a chart of the outcome.
 
 ## How JWT auth flows through the gateway
 
-*(To fill in once the API gateway from Step 3 exists.)*
+Both frontends used to call `ledger-service` and `notification-service` directly. Now there's a
+third module, `api-gateway`, sitting in front of both -- every request from the browser (via the
+Next.js app's server-side BFF routes, or straight from the Angular admin console) goes to the
+gateway's `/api/ledger/**` or `/api/notifications/**` paths first.
+
+The gateway is built on **Spring Cloud Gateway**, which is reactive (WebFlux, Netty) rather than
+the usual servlet stack the other two services use. That matters here specifically because a
+gateway's whole job is holding open many slow, in-flight proxied connections at once -- a
+thread-per-request servlet model would need one thread sitting blocked per in-flight request;
+the reactive model handles that same load on a small fixed pool of event-loop threads, since
+nothing is blocking while it waits for the backend to respond.
+
+Per request, two independent things happen before it's forwarded:
+
+1. **JWT validation, again.** `JwtAuthenticationFilter` parses and verifies the same bearer token
+   ledger-service and notification-service would otherwise validate. If it's missing, expired, or
+   signed with the wrong key, the gateway rejects it with a 401 before a single byte reaches
+   either backend. Deliberately, the gateway does *not* become the only place that checks this --
+   each backend service still validates the token again itself when the request arrives (they
+   have no way of knowing a request came through the gateway rather than being sent to them
+   directly, nor should they trust that blindly). This is defense in depth, not a shortcut: the
+   gateway's check is a fast-fail optimization that stops obviously-bad requests early and takes
+   load off the backends, while the backends remain the actual authority on whether a token is
+   valid.
+2. **Per-user rate limiting.** Spring Cloud Gateway ships a Redis-backed token-bucket rate
+   limiter out of the box; the only thing to supply is a `KeyResolver` that decides *what* counts
+   as "a user" for bucketing purposes. The default is the caller's IP, which is wrong for an app
+   where many users can share a NAT/office network and one bad actor could rate-limit everyone
+   else -- so the key here is the JWT subject the first filter already validated. One abusive
+   account exhausting its own bucket never touches anyone else's.
+
+One Spring gotcha worth remembering for an interview: the rate limiter's `KeyResolver` bean had to
+be renamed from `UserKeyResolver` to `RateLimitKeyResolverConfig`. A `@Configuration` class
+auto-registers *itself* as a bean, named by decapitalizing the class name -- so a class called
+`UserKeyResolver` registered a bean named `userKeyResolver`, which collided with the `@Bean
+KeyResolver userKeyResolver()` method declared inside it, and Spring refused to start
+(`BeanDefinitionOverrideException`) rather than silently pick one. Renaming the class (keeping the
+bean method's name, since that name is referenced by string in `application.yml`) fixed it.
 
 ## Why the Redis cache eviction is safe
 
-*(To fill in once Redis caching from Step 3 exists.)*
+`GET /accounts/{id}` is now cached in Redis (`@Cacheable("accounts")`, 60s TTL) since account
+balances are read far more often than they change. The interesting part isn't the caching itself
+-- it's *when* the cache entry gets evicted after a transfer changes a balance.
+
+The naive approach is to evict both accounts' cache entries from inside the same transaction that
+moves the money. That's wrong, and the bug it causes is subtle enough to be worth walking through
+out loud: under the default `READ_COMMITTED` isolation level, a concurrent `GET` can land in the
+gap between "the eviction happens" and "the transaction actually commits." That reader doesn't see
+the new balance yet (the writing transaction hasn't committed), so it reads the *old* balance from
+the database and re-populates the cache with it -- except now that stale value isn't going anywhere
+until the TTL expires, because nothing evicts it again. The transfer technically succeeded and the
+eviction technically ran, and the cache still served a wrong balance for up to 60 seconds afterward.
+
+The fix: evict only *after* the transaction commits, using Spring's
+`@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)`. `LedgerMutationService`
+publishes an `AccountsMutatedEvent` (just the two account IDs) right after saving both accounts,
+but the listener that actually calls `cache.evict(...)` only fires once Spring confirms the
+transaction committed. That closes the race: by the time anything evicts the old entry, the new
+balance is already visible to any reader, so a cache miss immediately after a transfer always
+re-populates with the correct, post-transfer value.
+
+The other non-obvious part was serialization. `Account` is a JPA entity with no setters (balance
+changes only happen through `credit()`/`debit()`, its actual business operations), so Jackson
+needs field-level visibility to deserialize it back out of Redis at all. On top of that, caching
+a polymorphic-ish object graph through `GenericJackson2JsonRedisSerializer` means Jackson embeds
+type metadata in the JSON so it knows what class to reconstruct -- and that requires an explicit
+allowlist (`BasicPolymorphicTypeValidator`) of exactly which classes are trusted to be
+deserialized this way. Left too narrow, deserialization fails closed on types like
+`java.math.BigDecimal` or `java.time.Instant` that legitimately appear in the object graph;
+opened to anything, it would be an arbitrary-deserialization risk if a somehow-untrusted payload
+ever entered that Redis instance. The safe middle ground here is an allowlist scoped to exactly
+`com.ledgerguard.ledger.domain` plus the handful of JDK value types actually used -- justified
+because this Redis data never comes from outside the service; it's a pure internal round-trip
+cache, not a channel that ever carries external input.
 
 ## The 2 concurrency bugs the tests caught, and how they were fixed
 

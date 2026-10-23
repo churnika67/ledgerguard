@@ -1,13 +1,14 @@
 # LedgerGuard
 
-An event-driven payments ledger, built as two Spring Boot microservices, whose one job is to
-**never double-charge, lose, or create money -- even under heavy concurrency.** Every transfer is
-double-entry, every write is idempotent, and every invariant is independently checkable at any
-time via `GET /reconciliation`. A chaos test throws 10,000 concurrent transfers from 200 virtual
-threads at 50 accounts and asserts the books still balance, for both of the two supported
-locking strategies.
+An event-driven payments ledger, built as a set of Spring Boot microservices behind a Spring
+Cloud Gateway, whose one job is to **never double-charge, lose, or create money -- even under
+heavy concurrency.** Every transfer is double-entry, every write is idempotent, and every
+invariant is independently checkable at any time via `GET /reconciliation`. A chaos test throws
+10,000 concurrent transfers from 200 virtual threads at 50 accounts and asserts the books still
+balance, for both of the two supported locking strategies.
 
-**Live API:** https://ledgerguard-ledger-service.onrender.com
+**Live API (via the gateway):** https://ledgerguard-api-gateway.onrender.com/api/ledger
+**Live API (ledger-service directly):** https://ledgerguard-ledger-service.onrender.com
 **Swagger UI:** https://ledgerguard-ledger-service.onrender.com/swagger-ui.html
 **Live web app:** https://ledgerguard-web.vercel.app (demo users: `alice`/`password123`, or
 `admin`/`admin123`)
@@ -29,46 +30,58 @@ locking strategies.
 > **Known gap in the live demo:** the web app's Notifications page won't show anything in
 > production, because notification-service isn't deployed anywhere public and the live
 > ledger-service has Kafka disabled (see above) -- so no events ever reach a notification
-> consumer in this environment. Login, accounts, and sending money (including the
-> idempotency-key replay demo) all work fully live. The notification pipeline itself is proven
-> by the automated test suite and by `docker compose up` locally.
+> consumer in this environment. The gateway's `/api/notifications/**` route exists and is
+> correctly configured, it just has nothing live to forward to. Login, accounts, and sending
+> money (including the idempotency-key replay demo) all work fully live. The notification
+> pipeline itself is proven by the automated test suite and by `docker compose up` locally.
+>
+> Redis caching (`GET /accounts/{id}`) and the gateway's per-user rate limiting both run against
+> a real [Upstash](https://upstash.com) Redis instance in production, free tier -- same
+> env-vars-only wiring as the database.
 
 ## What's here
 
 - **ledger-service** -- accounts, transfers, double-entry ledger, reconciliation, JWT auth,
-  the transactional outbox.
+  the transactional outbox, Redis-backed caching on `GET /accounts/{id}`.
 - **notification-service** -- consumes `ledger.transfers` off Kafka, idempotently, and serves
   per-account notifications.
-- **common** -- the Kafka event DTOs shared by both.
+- **api-gateway** -- a Spring Cloud Gateway in front of both services: validates the JWT before
+  forwarding, enforces a per-user Redis-backed rate limit, and routes `/api/ledger/**` and
+  `/api/notifications/**` to the right backend. Both frontends talk to this, not to the backend
+  services directly. See [docs/interview-notes.md](docs/interview-notes.md) for how a request
+  flows through it.
+- **common** -- the Kafka event DTOs shared by the two backend services.
 - **web** -- a Next.js 14 customer app (login, accounts, send money, notifications). Talks to
-  ledger-service/notification-service through its own server-side API routes (a
-  Backend-for-Frontend layer), never directly from the browser. See
-  [docs/interview-notes.md](docs/interview-notes.md) for how that's wired up.
+  the gateway through its own server-side API routes (a Backend-for-Frontend layer), never
+  directly from the browser. See interview-notes.md for how that's wired up.
 - **admin-console** -- an Angular 17 back-office SPA (reconciliation dashboard, a
   sortable/searchable/paginated accounts table, a filterable transfer audit log, and a
   chaos-test panel that drives real concurrent load against the backend and charts the result).
-  Unlike `web`, it's a pure client-side app with no server of its own, so it calls
-  ledger-service directly from the browser -- see interview-notes.md for why that means it
-  stores its JWT differently than the Next.js app does.
+  Unlike `web`, it's a pure client-side app with no server of its own, so it calls the gateway
+  directly from the browser -- see interview-notes.md for why that means it stores its JWT
+  differently than the Next.js app does.
 
 ## How to run it
 
-### With Docker Compose (both services, Postgres, Kafka)
+### With Docker Compose (everything: gateway, both services, Postgres, Kafka, Redis)
 
 ```bash
 docker compose up --build
 ```
 
-- ledger-service: http://localhost:8090 (Swagger at `/swagger-ui.html`)
-- notification-service: http://localhost:8081
+- api-gateway: http://localhost:8082 (`/api/ledger/**`, `/api/notifications/**` -- this is what
+  both frontends point at)
+- ledger-service: http://localhost:8090 directly (Swagger at `/swagger-ui.html`)
+- notification-service: http://localhost:8081 directly
 - Postgres: localhost:5544
 - Kafka: localhost:9092
+- Redis: localhost:6399
 
 ### The web app
 
 ```bash
 cd web
-cp .env.local.example .env.local   # point at ledger-service/notification-service
+cp .env.local.example .env.local   # points GATEWAY_URL at api-gateway, not the services directly
 npm install
 npm run dev                        # http://localhost:3000
 ```
@@ -84,9 +97,9 @@ npm install
 npm start                          # http://localhost:4200 (ADMIN only -- admin/admin123)
 ```
 
-Points at `http://localhost:8090` in dev by default (see `src/environments/environment.ts`); the
-production build points at the live Render backend. Tests: `npm test` (Jasmine/Karma),
-`npx playwright test` (needs the backend running too).
+Points at `http://localhost:8082/api/ledger` (the local gateway) in dev by default (see
+`src/environments/environment.ts`); the production build points at the live gateway on Render.
+Tests: `npm test` (Jasmine/Karma), `npx playwright test` (needs the backend running too).
 
 ### Just the tests
 
@@ -106,7 +119,8 @@ mvn test -Dtest=PessimisticBenchmarkTest,OptimisticBenchmarkTest -Dsurefire.excl
 ## curl walkthrough
 
 ```bash
-BASE=http://localhost:8090   # or the live URL above
+BASE=http://localhost:8082/api/ledger   # or https://ledgerguard-api-gateway.onrender.com/api/ledger live --
+                                         # goes through the gateway, so it's also rate-limited per user
 
 # 1. Get a token (demo users: alice/password123 = USER, admin/admin123 = ADMIN)
 TOKEN=$(curl -s -X POST "$BASE/auth/token" \

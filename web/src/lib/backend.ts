@@ -27,8 +27,9 @@ export interface TransferRequestDto {
   currency: string;
 }
 
-const LEDGER_SERVICE_URL = process.env.LEDGER_SERVICE_URL ?? "http://localhost:8080";
-const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL ?? "http://localhost:8081";
+// Both backends are reached through api-gateway now, never directly -- it strips the
+// /api/ledger or /api/notifications prefix before forwarding, so every path below carries one.
+const GATEWAY_URL = process.env.GATEWAY_URL ?? "http://localhost:8082";
 
 /** A problem+json error from either backend service, thrown so route handlers can forward it. */
 export class BackendError extends Error {
@@ -59,19 +60,19 @@ async function call<T>(baseUrl: string, path: string, init: RequestInit & { toke
 }
 
 export function login(request: AuthRequest): Promise<AuthResponse> {
-  return call(LEDGER_SERVICE_URL, "/auth/token", { method: "POST", body: JSON.stringify(request) });
+  return call(GATEWAY_URL, "/api/ledger/auth/token", { method: "POST", body: JSON.stringify(request) });
 }
 
 export function listAccounts(token: string): Promise<AccountResponse[]> {
-  return call(LEDGER_SERVICE_URL, "/accounts", { method: "GET", token });
+  return call(GATEWAY_URL, "/api/ledger/accounts", { method: "GET", token });
 }
 
 export function openAccount(token: string, request: OpenAccountRequest): Promise<AccountResponse> {
-  return call(LEDGER_SERVICE_URL, "/accounts", { method: "POST", token, body: JSON.stringify(request) });
+  return call(GATEWAY_URL, "/api/ledger/accounts", { method: "POST", token, body: JSON.stringify(request) });
 }
 
 export function getAccount(token: string, accountId: string): Promise<AccountDetailResponse> {
-  return call(LEDGER_SERVICE_URL, `/accounts/${accountId}`, { method: "GET", token });
+  return call(GATEWAY_URL, `/api/ledger/accounts/${accountId}`, { method: "GET", token });
 }
 
 export function transfer(
@@ -79,7 +80,7 @@ export function transfer(
   idempotencyKey: string,
   request: TransferRequestDto,
 ): Promise<TransferResponseDto> {
-  return call(LEDGER_SERVICE_URL, "/transfers", {
+  return call(GATEWAY_URL, "/api/ledger/transfers", {
     method: "POST",
     token,
     headers: { "Idempotency-Key": idempotencyKey },
@@ -88,5 +89,5 @@ export function transfer(
 }
 
 export function listNotifications(token: string, accountId: string): Promise<NotificationResponse[]> {
-  return call(NOTIFICATION_SERVICE_URL, `/notifications/${accountId}`, { method: "GET", token });
+  return call(GATEWAY_URL, `/api/notifications/notifications/${accountId}`, { method: "GET", token });
 }
