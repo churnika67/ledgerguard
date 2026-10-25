@@ -44,7 +44,10 @@ balance, for both of the two supported locking strategies.
 ## What's here
 
 - **ledger-service** -- accounts, transfers, double-entry ledger, reconciliation, JWT auth,
-  the transactional outbox, Redis-backed caching on `GET /accounts/{id}`.
+  the transactional outbox, Redis-backed caching on `GET /accounts/{id}`, and a Spring Batch
+  job that generates a CSV statement per account for a given month and uploads it to S3
+  (`POST /admin/statements/run`, `GET /admin/statements/{accountId}?month=yyyy-MM`, both
+  ADMIN-only).
 - **notification-service** -- consumes `ledger.transfers` off Kafka, idempotently, stores
   notifications in MongoDB, and serves both a one-shot list and a live Server-Sent Events stream
   per account.

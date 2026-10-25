@@ -30,6 +30,7 @@
         <maven.compiler.release>21</maven.compiler.release>
         <testcontainers.version>1.21.4</testcontainers.version>
         <spring-cloud.version>2023.0.3</spring-cloud.version>
+        <spring-cloud-aws.version>3.1.1</spring-cloud-aws.version>
         <springdoc.version>2.6.0</springdoc.version>
         <jjwt.version>0.12.6</jjwt.version>
         <surefire.excludedGroups>benchmark</surefire.excludedGroups>
@@ -48,6 +49,13 @@
                 <groupId>org.springframework.cloud</groupId>
                 <artifactId>spring-cloud-dependencies</artifactId>
                 <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.awspring.cloud</groupId>
+                <artifactId>spring-cloud-aws-dependencies</artifactId>
+                <version>${spring-cloud-aws.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

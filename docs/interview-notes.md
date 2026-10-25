@@ -327,3 +327,40 @@ out through something every instance can subscribe to -- Redis pub/sub is the na
 here, especially since Redis is already a project dependency from Step 3. Worth being able to say
 out loud in an interview: this is a known, intentional scope boundary for a single-instance demo,
 not something that was overlooked.
+
+## Spring Batch: chunk-oriented processing and why the processor is step-scoped
+
+The monthly statement job is one chunk-oriented step: a `RepositoryItemReader<Account>` pages
+through every account (50 at a time), a processor turns each one into a `StatementFile`, and a
+writer uploads each finished chunk's files to S3. "Chunk-oriented" is the part worth being able
+to explain precisely: Spring Batch reads and processes items one at a time, but commits in
+batches (chunk size 10 here) -- so a transaction wraps 10 reads+processes+the write together,
+not the whole job and not each item individually. That's a deliberate middle ground: too small a
+chunk size means constant transaction overhead for not much benefit; too large means a late
+failure rolls back (and has to re-read) a large amount of already-done work.
+
+`StatementItemProcessor` is annotated `@StepScope`, which is what makes `@Value("#{jobParameters
+['month']}")` resolvable in its constructor. Without step scope, this bean would be a normal
+Spring singleton created once at application startup -- before any job has even been launched,
+let alone with its parameters known -- so there would be no `month` value to inject yet.
+`@StepScope` tells Spring to defer creating this bean until a step actually starts, by which
+point the job's parameters exist and the expression can resolve. This is also exactly why the
+job always gets a fresh, unique `runAt` parameter on every launch in `StatementRunService`: Spring
+Batch treats a job execution with identical parameters to a previous completed run as "already
+done" and refuses to repeat it, which would otherwise make the admin-triggered endpoint
+unusable for re-running the same month on demand (e.g. during a demo).
+
+## Testing a cloud dependency without the cloud: LocalStack
+
+`StatementBatchIntegrationTest` runs the entire pipeline -- real reader, real processor, real
+writer, real Spring Batch job execution -- against a LocalStack container instead of real AWS.
+LocalStack emulates the S3 API well enough that the exact same `S3Client` bean and
+`spring.cloud.aws.*` configuration path work unchanged; only the endpoint, region, and
+credentials are swapped for test values via `@DynamicPropertySource`, the same pattern already
+used for Postgres, Kafka, Redis, and MongoDB elsewhere in this project. One LocalStack-specific
+detail: S3 there needs path-style bucket addressing
+(`spring.cloud.aws.s3.path-style-access-enabled=true`) instead of the virtual-hosted-style
+addressing real AWS S3 uses, since LocalStack doesn't do DNS-based bucket routing. Buckets also
+don't pre-exist, so the test creates one itself before running the job -- in production, the
+bucket is assumed to already exist (created once, out of band), which is the normal operational
+split between "infrastructure that's provisioned" and "data the application writes."

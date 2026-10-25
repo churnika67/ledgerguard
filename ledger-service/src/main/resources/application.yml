@@ -21,6 +21,15 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  batch:
+    jdbc:
+      initialize-schema: never
+    job:
+      enabled: false
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:us-east-1}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
@@ -57,6 +66,8 @@ ledger:
     publish-topic: ledger.transfers
     poll-interval-ms: 500
     batch-size: 100
+  statements:
+    bucket: ${STATEMENTS_BUCKET:ledgerguard-statements}
 
 jwt:
   secret: ${JWT_SECRET:ledgerguard-demo-secret-key-change-me-please-32bytes-min}

@@ -22,7 +22,7 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler({AccountNotFoundException.class, TransferNotFoundException.class,
-            AdminController.ChaosRunNotFoundException.class})
+            AdminController.ChaosRunNotFoundException.class, AdminController.StatementNotFoundException.class})
     public ProblemDetail handleNotFound(RuntimeException e) {
         return problem(HttpStatus.NOT_FOUND, e.getMessage());
     }
@@ -30,6 +30,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ProblemDetail handleIllegalArgument(IllegalArgumentException e) {
         return problem(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+
+    @ExceptionHandler(java.time.format.DateTimeParseException.class)
+    public ProblemDetail handleDateTimeParse(java.time.format.DateTimeParseException e) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid month: " + e.getMessage());
     }
 
     @ExceptionHandler(IdempotencyConflictException.class)

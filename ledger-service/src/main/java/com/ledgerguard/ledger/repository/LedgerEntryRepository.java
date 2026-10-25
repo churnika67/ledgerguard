@@ -7,12 +7,22 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
 public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> {
 
     List<LedgerEntry> findTop20ByAccountIdOrderByCreatedAtDesc(UUID accountId);
+
+    List<LedgerEntry> findByAccountIdAndCreatedAtBetweenOrderByCreatedAtAsc(UUID accountId, Instant start,
+                                                                             Instant end);
+
+    /** Net signed effect (credits positive, debits negative) of every entry before a point in time --
+     * added to the account's opening balance, this is the balance as of that point. */
+    @Query("select coalesce(sum(case when e.direction = 'CREDIT' then e.amount else -e.amount end), 0) "
+            + "from LedgerEntry e where e.accountId = :accountId and e.createdAt < :before")
+    BigDecimal netAmountBefore(@Param("accountId") UUID accountId, @Param("before") Instant before);
 
     long countByTransferId(UUID transferId);
 
