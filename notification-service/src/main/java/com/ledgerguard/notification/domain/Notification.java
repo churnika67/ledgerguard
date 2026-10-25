@@ -1,41 +1,38 @@
 package com.ledgerguard.notification.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 import java.util.UUID;
 
-/** A "payment sent/received" or "payment failed" message surfaced for one account. */
-@Entity
-@Table(name = "notifications")
+/**
+ * A "payment sent/received" or "payment failed" message surfaced for one account.
+ *
+ * <p>The id is not a random UUID -- see {@link com.ledgerguard.notification.service.NotificationService}
+ * for why it's deterministically derived from the source event, which is what makes a redelivered
+ * Kafka record an idempotent no-op rather than a duplicate.
+ */
+@Document(collection = "notifications")
 public class Notification {
 
     @Id
     private UUID id;
 
-    @Column(name = "account_id", nullable = false)
+    @Indexed
     private UUID accountId;
 
-    @Column(name = "transfer_id", nullable = false)
     private UUID transferId;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
     private NotificationType type;
 
-    @Column(nullable = false)
     private String message;
 
-    @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
     protected Notification() {
-        // JPA
+        // Spring Data
     }
 
     public Notification(UUID id, UUID accountId, UUID transferId, NotificationType type, String message,

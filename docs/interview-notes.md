@@ -271,3 +271,59 @@ assertion in the chaos test (fewer committed transfers than expected), not as an
 the kind of bug that's easy to miss without a test that actually hammers the system with real
 concurrency. Fix: catch Spring's `ConcurrencyFailureException`, the common superclass of both
 exception types, so either kind of conflict gets retried the same way.
+
+## Moving notification-service to MongoDB: redesigning the dedupe, not just swapping drivers
+
+The relational version had two tables: `notifications`, and a `processed_events` table that
+existed purely to answer one question -- "have I already handled this Kafka event id?" -- so a
+redelivered record (consumer restart, rebalance, or the outbox publisher resending an
+unacknowledged send) was a no-op instead of a duplicate. Both writes (the notifications plus the
+`processed_events` marker) had to land in one transaction, or a crash between them would leave
+the event unmarked while the notifications already existed, and a redelivery would create a
+second copy.
+
+Porting that shape 1:1 to MongoDB would need a multi-document transaction, which only works
+against a replica set -- fine on Atlas (even its free M0 tier is a 3-node replica set), more
+awkward for local Docker/CI unless you specifically configure a single-node replica set there
+too. Rather than carry that complexity over, the notification's own `_id` is now derived
+deterministically from `(eventId, role)` via `UUID.nameUUIDFromBytes` (role being `"SENT"`,
+`"RECEIVED"`, or `"FAILED"` depending on which notification it is). `MongoRepository.save()`
+upserts by id: if the id already exists, it overwrites that document instead of inserting a new
+one. A redelivered event recomputes the exact same id and overwrites the exact same document,
+so the end state is identical whether the event was processed once or five times -- no separate
+dedupe table, no transaction, no replica-set requirement at all. The tradeoff, stated plainly: a
+redelivery is an idempotent *overwrite*, not a true no-op (the document's `createdAt` moves to
+the reprocessing time) -- fine here since there's nothing user-visible to distinguish the two,
+but worth saying out loud since it's a different guarantee than the original design, not just a
+re-implementation of the same one.
+
+## Why the SSE stream is proxied through Next.js instead of hit directly from the browser
+
+The browser's `EventSource` API has one real limitation: it can't set custom request headers,
+which rules out attaching `Authorization: Bearer <token>` the normal way. The usual workarounds
+are putting the token in the URL as a query parameter (it ends up in server access logs and
+browser history -- exactly where a credential shouldn't be) or switching to `fetch` with a
+`ReadableStream` reader (which means losing `EventSource`'s automatic reconnect-on-drop behavior
+and reimplementing it by hand).
+
+Since `web/` already proxies every other backend call through its own server-side route handlers
+(the existing Backend-for-Frontend pattern, keeping the JWT in an httpOnly cookie the browser's
+JavaScript never touches), the SSE route does the same thing: a Next.js route handler reads the
+session cookie server-side, makes the real authenticated request to the gateway with a normal
+`Authorization` header, and returns the upstream response's body stream completely unmodified as
+its own response. The browser's `EventSource` only ever talks to the Next.js server, same-origin,
+no token anywhere it can see -- and still gets automatic reconnection for free, since that's
+`EventSource` behavior at the browser layer, independent of who it's actually connecting to.
+
+## SSE delivery is in-memory and single-instance -- a known, stated limitation
+
+`NotificationStreamRegistry` keeps open `SseEmitter`s in a plain `ConcurrentHashMap`, scoped to
+whichever instance holds that particular browser connection. That's correct and sufficient for
+this project's single-instance deployment, but it would silently break the moment
+notification-service ran as more than one instance: a Kafka event could get consumed by instance
+B while the browser's long-lived SSE connection is parked on instance A, and B has no way to
+reach A's in-memory map to push it. The fix at that point would be to fan published notifications
+out through something every instance can subscribe to -- Redis pub/sub is the natural choice
+here, especially since Redis is already a project dependency from Step 3. Worth being able to say
+out loud in an interview: this is a known, intentional scope boundary for a single-instance demo,
+not something that was overlooked.

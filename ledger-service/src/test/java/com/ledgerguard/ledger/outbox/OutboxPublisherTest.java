@@ -14,6 +14,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.TestPropertySource;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -24,6 +25,11 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+// This test drives OutboxPublisher.publishPending() by hand to assert on its effects
+// deterministically. The real @Scheduled poll (every 500ms in application.yml) would otherwise
+// race it: a tick landing between the test's own calls can publish the same event first,
+// which doesn't change the end state but can flip which call the assertions see it after.
+@TestPropertySource(properties = "ledger.outbox.poll-interval-ms=600000")
 class OutboxPublisherTest extends KafkaIntegrationTestBase {
 
     @Autowired

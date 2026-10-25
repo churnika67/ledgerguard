@@ -6,7 +6,6 @@ import com.ledgerguard.common.event.TransferCompletedEvent;
 import com.ledgerguard.notification.NotificationIntegrationTestBase;
 import com.ledgerguard.notification.domain.Notification;
 import com.ledgerguard.notification.repository.NotificationRepository;
-import com.ledgerguard.notification.repository.ProcessedEventRepository;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.junit.jupiter.api.Test;
@@ -40,8 +39,6 @@ class TransferEventE2ETest extends NotificationIntegrationTestBase {
     private ObjectMapper objectMapper;
     @Autowired
     private NotificationRepository notificationRepository;
-    @Autowired
-    private ProcessedEventRepository processedEventRepository;
 
     @Test
     void exactlyOneNotificationPerCompletedTransferEvenWhenThePublisherSendsTheEventTwice() throws Exception {
@@ -63,10 +60,10 @@ class TransferEventE2ETest extends NotificationIntegrationTestBase {
         assertThat(forTransfer).hasSize(2);
         assertThat(forTransfer).extracting(n -> n.getAccountId())
                 .containsExactlyInAnyOrder(fromAccountId, toAccountId);
-        assertThat(processedEventRepository.findById(eventId)).isPresent();
 
         // Give any (incorrect) second round of processing a chance to show up before asserting
-        // there really is no duplicate.
+        // there really is no duplicate -- reprocessing the redelivered copy should upsert the
+        // same two document ids, not insert two more.
         Thread.sleep(2000);
         assertThat(notificationRepository.findAll().stream().filter(n -> n.getTransferId().equals(transferId)))
                 .hasSize(2);

@@ -9,6 +9,7 @@ balance, for both of the two supported locking strategies.
 
 **Live API (via the gateway):** https://ledgerguard-api-gateway.onrender.com/api/ledger
 **Live API (ledger-service directly):** https://ledgerguard-ledger-service.onrender.com
+**Live API (notification-service directly):** https://ledgerguard-notification-service.onrender.com
 **Swagger UI:** https://ledgerguard-ledger-service.onrender.com/swagger-ui.html
 **Live web app:** https://ledgerguard-web.vercel.app (demo users: `alice`/`password123`, or
 `admin`/`admin123`)
@@ -27,13 +28,14 @@ balance, for both of the two supported locking strategies.
 > `docker compose up` locally, which brings up both services plus Kafka in KRaft mode. See
 > [docs/design-spec.md](docs/design-spec.md) for how it all fits together.
 >
-> **Known gap in the live demo:** the web app's Notifications page won't show anything in
-> production, because notification-service isn't deployed anywhere public and the live
-> ledger-service has Kafka disabled (see above) -- so no events ever reach a notification
-> consumer in this environment. The gateway's `/api/notifications/**` route exists and is
-> correctly configured, it just has nothing live to forward to. Login, accounts, and sending
-> money (including the idempotency-key replay demo) all work fully live. The notification
-> pipeline itself is proven by the automated test suite and by `docker compose up` locally.
+> **Known gap in the live demo:** notification-service is deployed and reachable through the
+> gateway (listing notifications and the live SSE stream both work against its MongoDB Atlas
+> free tier), but it has nothing to consume, because the live ledger-service runs with
+> `KAFKA_ENABLED=false` (see above) -- Render has no managed Kafka, so no transfer events are
+> ever published for it to react to in this environment. Login, accounts, and sending money
+> (including the idempotency-key replay demo) all work fully live. The full outbox -> Kafka ->
+> notification pipeline, and the live SSE push once a notification is created, are both proven by
+> the automated test suite and by `docker compose up` locally end-to-end.
 >
 > Redis caching (`GET /accounts/{id}`) and the gateway's per-user rate limiting both run against
 > a real [Upstash](https://upstash.com) Redis instance in production, free tier -- same
@@ -43,8 +45,9 @@ balance, for both of the two supported locking strategies.
 
 - **ledger-service** -- accounts, transfers, double-entry ledger, reconciliation, JWT auth,
   the transactional outbox, Redis-backed caching on `GET /accounts/{id}`.
-- **notification-service** -- consumes `ledger.transfers` off Kafka, idempotently, and serves
-  per-account notifications.
+- **notification-service** -- consumes `ledger.transfers` off Kafka, idempotently, stores
+  notifications in MongoDB, and serves both a one-shot list and a live Server-Sent Events stream
+  per account.
 - **api-gateway** -- a Spring Cloud Gateway in front of both services: validates the JWT before
   forwarding, enforces a per-user Redis-backed rate limit, and routes `/api/ledger/**` and
   `/api/notifications/**` to the right backend. Both frontends talk to this, not to the backend
@@ -63,7 +66,7 @@ balance, for both of the two supported locking strategies.
 
 ## How to run it
 
-### With Docker Compose (everything: gateway, both services, Postgres, Kafka, Redis)
+### With Docker Compose (everything: gateway, both services, Postgres, MongoDB, Kafka, Redis)
 
 ```bash
 docker compose up --build
@@ -74,6 +77,7 @@ docker compose up --build
 - ledger-service: http://localhost:8090 directly (Swagger at `/swagger-ui.html`)
 - notification-service: http://localhost:8081 directly
 - Postgres: localhost:5544
+- MongoDB: localhost:27018
 - Kafka: localhost:9092
 - Redis: localhost:6399
 

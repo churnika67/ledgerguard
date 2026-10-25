@@ -17,7 +17,7 @@ export default function NotificationsPage() {
         Notifications
       </h1>
       <p className="text-sm text-slate-500">
-        Polls every 5s for now; a live SSE stream from notification-service lands in a later step.
+        Live -- new notifications stream in over Server-Sent Events as soon as they happen.
       </p>
 
       <label className="flex max-w-sm flex-col gap-1.5 text-sm font-medium text-slate-700">

@@ -47,6 +47,16 @@ services:
       timeout: 5s
       retries: 10
 
+  mongo:
+    image: mongo:7
+    ports:
+      - "27018:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   ledger-service:
     build:
       context: .
@@ -79,14 +89,12 @@ services:
     ports:
       - "8081:8081"
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/ledgerguard_notifications
-      DB_USERNAME: ledgerguard
-      DB_PASSWORD: ledgerguard
+      MONGODB_URI: mongodb://mongo:27017/ledgerguard_notifications
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_ENABLED: "true"
       JWT_SECRET: ledgerguard-demo-secret-key-change-me-please-32bytes-min
     depends_on:
-      postgres:
+      mongo:
         condition: service_healthy
       kafka:
         condition: service_healthy
