@@ -26,4 +26,11 @@ public interface TransferRepository extends JpaRepository<Transfer, UUID> {
             + "and (:rejectReason is null or t.rejectReason = :rejectReason) order by t.createdAt desc")
     Page<Transfer> search(@Param("status") TransferStatus status, @Param("rejectReason") String rejectReason,
                            Pageable pageable);
+
+    /** Every transfer where any of the given accounts was sender or recipient, newest first --
+     * one query for however many accounts the GraphQL `Account.transfers` batch loader is resolving
+     * at once, instead of one query per account. */
+    @Query("select t from Transfer t where t.fromAccountId in :accountIds or t.toAccountId in :accountIds "
+            + "order by t.createdAt desc")
+    List<Transfer> findInvolvingAccounts(@Param("accountIds") Collection<UUID> accountIds);
 }

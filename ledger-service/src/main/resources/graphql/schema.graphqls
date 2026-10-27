@@ -1,0 +1,58 @@
+scalar BigDecimal
+
+type Account {
+    id: ID!
+    ownerName: String!
+    currency: String!
+    balance: BigDecimal!
+    openingBalance: BigDecimal!
+    createdAt: String!
+    "The most recent transfers this account sent or received, newest first."
+    transfers: [Transfer!]!
+}
+
+enum TransferStatus {
+    COMPLETED
+    REJECTED
+}
+
+type Transfer {
+    transferId: ID!
+    fromAccountId: ID!
+    toAccountId: ID!
+    amount: BigDecimal!
+    currency: String!
+    status: TransferStatus!
+    rejectReason: String
+    createdAt: String!
+}
+
+type ReconciliationReport {
+    healthy: Boolean!
+    totalBalance: BigDecimal!
+    totalOpeningBalance: BigDecimal!
+    accountsWithMismatchedBalance: [ID!]!
+    transfersNotNettingToZero: [ID!]!
+}
+
+type Query {
+    "The caller's own accounts, newest first."
+    myAccounts: [Account!]!
+    "One account by id. The caller must own it, or be ADMIN."
+    account(id: ID!): Account
+    "ADMIN only: the same reconciliation check GET /reconciliation runs."
+    reconciliation: ReconciliationReport!
+}
+
+input TransferInput {
+    fromAccountId: ID!
+    toAccountId: ID!
+    amount: BigDecimal!
+    currency: String!
+    idempotencyKey: String!
+}
+
+type Mutation {
+    "Move money between two accounts. idempotencyKey gives the same replay-safety guarantee as the REST endpoint: replaying the same key with the same input returns the original result with no new money movement."
+    transfer(input: TransferInput!): Transfer!
+}

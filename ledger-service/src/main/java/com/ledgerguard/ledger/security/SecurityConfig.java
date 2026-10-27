@@ -104,6 +104,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/token").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/api-docs/**").permitAll()
+                        // The GraphiQL explorer page itself loads with no token (like Swagger UI) --
+                        // actual queries still go through /graphql, which stays authenticated below.
+                        .requestMatchers("/graphiql").permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/actuator/info")
                         .permitAll()
                         .anyRequest().authenticated())
