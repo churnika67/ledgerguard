@@ -15,4 +15,8 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 COPY --from=build /workspace/ledger-service/target/ledger-service.jar app.jar
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+    CMD wget -q --spider http://localhost:8080/actuator/health || exit 1
+# JAVA_TOOL_OPTIONS (e.g. -Xmx384m on a 1GB host) is read directly by the JVM at startup from
+# the process environment -- no extra plumbing needed here, exec-form ENTRYPOINT included.
 ENTRYPOINT ["java", "-jar", "app.jar"]

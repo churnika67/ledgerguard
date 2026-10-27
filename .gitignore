@@ -5,3 +5,8 @@ target/
 .DS_Store
 .mvn/wrapper/maven-wrapper.jar
 .claude/
+
+# AWS deploy: resource ids/secrets generated at runtime, never committed
+deploy/aws/ids.env
+deploy/aws/*.pem
+deploy/aws/.env*
